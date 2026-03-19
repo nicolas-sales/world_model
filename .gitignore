@@ -1,0 +1,9 @@
+./venvwm
+venvwm/
+data/
+output.mp4
+yolov8s.pt
+
+# Python cache
+__pycache__/
+*.pyc
