@@ -43,7 +43,7 @@ while True:
             cls = int(box.cls[0])
             name = model.names[cls]
             
-            # 🔥 filtre
+            # filtre
             if name not in allowed_classes:
                 continue
             

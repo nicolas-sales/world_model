@@ -70,7 +70,7 @@ while True: # boucle infinie, lit toute la vidéo
                 cv2.line(frame, track[i-1], track[i], color, 2) # Relie les points pour obtenir une trajectoire
     
     # sauvegarde
-    out.write(frame) # Ajoite le frame dans la video
+    out.write(frame) # Ajoute le frame dans la video
     
     cv2.imshow("Tracking filtré", frame) # Affiche le frame
     
