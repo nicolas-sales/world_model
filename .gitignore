@@ -3,6 +3,7 @@ venvwm/
 data/
 output.mp4
 yolov8s.pt
+models/
 
 # Python cache
 __pycache__/

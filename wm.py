@@ -1,0 +1,228 @@
+import cv2 
+import numpy as np 
+import tensorflow as tf  
+from ultralytics import YOLO  
+from collections import defaultdict  # dictionnaire avec valeurs par défaut
+
+
+# 1 CHARGEMENT DES MODÈLES
+
+yolo_model = YOLO("yolov8s.pt")  # modèle de détection + tracking
+world_model = tf.keras.models.load_model("models/world_model.keras")  # modèle ML entraîné
+
+
+# 2 CHARGEMENT DE LA VIDÉO
+
+video_path = "data/videos/12.mp4"  # chemin de la vidéo
+cap = cv2.VideoCapture(video_path)  # ouverture de la vidéo
+
+# vérification que la vidéo s'ouvre bien
+if not cap.isOpened():
+    print("Erreur vidéo")
+    exit()
+
+# récupération de la taille originale de la vidéo
+orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+# taille pour affichage uniquement (plus léger)
+display_width = 640
+display_height = 360
+
+# facteurs pour convertir coordonnées originales → affichage
+scale_disp_x = display_width / orig_width
+scale_disp_y = display_height / orig_height
+
+# 3 PARAMÈTRES
+
+allowed_classes = {"car", "truck", "bus", "motorcycle", "person"} 
+
+# couleurs pour chaque type d'objet
+colors = {
+    "car": (0,255,0),
+    "truck": (0,0,255),
+    "bus": (255,0,0),
+    "motorcycle": (255,255,0),
+    "person": (255,0,255)
+}
+
+sequence_length = 3  # taille de la séquence utilisée par le modèle
+future_steps = 5  # nombre de prédictions futures
+
+dt = 0.5  # intervalle de temps utilisé pendant le training 
+alpha = 0.8  # facteur de smoothing (réduction du bruit)
+
+# historique des positions (pour affichage trajectoire)
+track_history = defaultdict(list)
+
+# états ML [x, y, vx, vy]
+track_states = defaultdict(list)
+
+frame_count = 0  # compteur de frames (pour optimiser les prédictions)
+
+
+# 4 FONCTION DE PRÉDICTION 
+
+def predict_future_fast(model, seq, steps=5):
+    seq = seq.copy()  # copie de la séquence initiale
+    preds = []  # liste des prédictions
+
+    for _ in range(steps):  # boucle pour prédire plusieurs steps
+        # inference rapide (beaucoup plus rapide que model.predict)
+        pred = model(seq[np.newaxis], training=False).numpy()[0]
+
+        preds.append(pred)  # stockage de la prédiction
+
+        # mise à jour de la séquence (sliding window)
+        seq = np.vstack([seq[1:], pred])
+
+    return np.array(preds, dtype=np.float32)  # conversion en array
+
+
+# 5 BOUCLE PRINCIPALE
+
+while True:
+
+    ret, frame = cap.read()  # lecture d'une frame
+
+    if not ret:  # fin de vidéo
+        break
+
+    frame_count += 1  # incrément du compteur
+
+   
+    # YOLO SUR IMAGE ORIGINALE 
+  
+    results = yolo_model.track(frame, persist=True, verbose=False)  # détection + tracking
+
+    # image redimensionnée uniquement pour affichage
+    display_frame = cv2.resize(frame, (display_width, display_height))
+
+    # vérifie si des objets sont détectés
+    if results[0].boxes.id is not None:
+
+        boxes = results[0].boxes  # bounding boxes
+        ids = boxes.id.int().cpu().tolist()  # IDs des objets
+
+        # boucle sur chaque objet détecté
+        for box, obj_id in zip(boxes, ids):
+
+            cls = int(box.cls[0])  # classe de l'objet
+            name = yolo_model.names[cls]  # nom de la classe
+
+            # filtre des classes
+            if name not in allowed_classes:
+                continue
+
+            # coordonnées bounding box (image originale)
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+            # centre de l'objet
+            cx = int((x1 + x2) / 2)
+            cy = int((y1 + y2) / 2)
+
+            # conversion coordonnées → affichage
+            x1_d = int(x1 * scale_disp_x)
+            y1_d = int(y1 * scale_disp_y)
+            x2_d = int(x2 * scale_disp_x)
+            y2_d = int(y2 * scale_disp_y)
+
+            cx_d = int(cx * scale_disp_x)
+            cy_d = int(cy * scale_disp_y)
+
+            color = colors[name]  # couleur associée
+
+           
+            # AFFICHAGE BOUNDING BOX
+          
+            cv2.rectangle(display_frame, (x1_d,y1_d), (x2_d,y2_d), color, 2)
+
+            cv2.putText(display_frame, f"{name} {obj_id}",
+                        (x1_d, y1_d-10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        color, 2)
+
+            
+            # TRAJECTOIRE PASSÉE
+            
+            track = track_history[obj_id]  # historique de l'objet
+            track.append((cx_d, cy_d))  # ajout du point
+
+            if len(track) > 30:  # limite de taille
+                track.pop(0)
+
+            # dessin des lignes de trajectoire
+            for i in range(1, len(track)):
+                cv2.line(display_frame, track[i-1], track[i], color, 2)
+
+            
+            # NORMALISATION (POUR ML)
+            
+            x_norm = cx / orig_width
+            y_norm = cy / orig_height
+
+          
+            # CALCUL VITESSE + SMOOTHING
+            
+            if len(track_states[obj_id]) > 0:
+
+                prev_x, prev_y, _, _ = track_states[obj_id][-1]
+
+                # smoothing (réduit le bruit YOLO)
+                x_norm = alpha * prev_x + (1 - alpha) * x_norm
+                y_norm = alpha * prev_y + (1 - alpha) * y_norm
+
+                # vitesse cohérente avec training
+                vx = (x_norm - prev_x) / dt
+                vy = (y_norm - prev_y) / dt
+
+            else:
+                vx = 0.0
+                vy = 0.0
+
+            # ajout de l'état
+            track_states[obj_id].append([x_norm, y_norm, vx, vy])
+
+            if len(track_states[obj_id]) > 30:
+                track_states[obj_id].pop(0)
+
+           
+            # PRÉDICTION FUTURE
+           
+            if len(track_states[obj_id]) >= sequence_length and frame_count % 2 == 0:
+
+                # récupération de la séquence récente
+                seq = np.array(track_states[obj_id][-sequence_length:], dtype=np.float32)
+
+                # prédiction future
+                preds = predict_future_fast(world_model, seq, steps=future_steps)
+
+                pred_points = []
+
+                # conversion prédictions → affichage
+                for pred in preds:
+                    px = int(pred[0] * display_width)
+                    py = int(pred[1] * display_height)
+                    pred_points.append((px, py))
+
+                # dessin des trajectoires futures
+                for i in range(1, len(pred_points)):
+                    cv2.line(display_frame, pred_points[i-1], pred_points[i], (0,0,255), 2)
+
+                # points futurs
+                for pt in pred_points:
+                    cv2.circle(display_frame, pt, 3, (0,0,255), -1)
+
+    # affichage final
+    cv2.imshow("World Model V4 (FULL RES YOLO)", display_frame)
+
+    # quitter avec ESC
+    if cv2.waitKey(1) & 0xFF == 27:
+        break
+
+# libération ressources
+cap.release()
+cv2.destroyAllWindows()
+
+            
+
