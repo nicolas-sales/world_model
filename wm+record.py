@@ -83,8 +83,33 @@ def predict_future_fast(model, seq, steps=5):
 
     return np.array(preds, dtype=np.float32)  # conversion en array
 
+# 5 FONCTION DANGER
+def compute_danger(x,y,vx,vy):
+    score=0
 
-# 5 BOUCLE PRINCIPALE
+      # Hauteur (adaptée au filtre 0.7)
+    if y > 0.6:
+        score+=3
+    if y > 0.45:
+        score+=2
+    elif y > 0.3:
+        score+=1
+    
+    # Largeur
+    if 0.45 <= x <= 0.55:
+        score+=2
+    elif 0.3 <= x <= 0.7:
+        score+=1
+
+    # Mouvement
+    if vy > 0.02:
+        score+=3
+    elif vy > 0.005:
+        score+=1
+
+    return score
+
+# 6 BOUCLE PRINCIPALE
 
 while True:
 
@@ -204,12 +229,27 @@ while True:
             # ajout de l'état
             track_states[obj_id].append([x_norm, y_norm, vx, vy])
 
+            danger = compute_danger(x_norm,y_norm,vx,vy)
+
+            if danger>=6:
+                danger_color=(0,0,255) # rouge
+            elif danger>=3:
+                danger_color=(0,165,255) # orange
+            else:
+                danger_color=(0,255,0) # vert 
+
             if len(track_states[obj_id]) > 30:
                 track_states[obj_id].pop(0)
 
             # ignore objets trop loin
             if y_norm < 0.25:
                 continue
+
+            # Affiche le score de danger
+            cv2.putText(display_frame, f"D:{danger}",
+            (x1_d, y1_d - 30),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+            danger_color, 2)
 
             # PRÉDICTION FUTURE
            
