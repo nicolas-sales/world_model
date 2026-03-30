@@ -13,7 +13,7 @@ world_model = tf.keras.models.load_model("models/world_model.keras")  # modèle 
 
 # 2 CHARGEMENT DE LA VIDÉO
 
-video_path = "data/videos/10.mp4"  # chemin de la vidéo
+video_path = "data/videos/1.mp4"  # chemin de la vidéo
 cap = cv2.VideoCapture(video_path)  # ouverture de la vidéo
 
 # vérification que la vidéo s'ouvre bien
@@ -36,7 +36,7 @@ scale_disp_y = display_height / orig_height
 # Writer
 fps = cap.get(cv2.CAP_PROP_FPS)
 fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-out = cv2.VideoWriter("output.mp4", fourcc, fps, (display_width, display_height))
+out = cv2.VideoWriter("output1.mp4", fourcc, fps, (display_width, display_height)) # output...  numéro à changer
 
 # 3 PARAMÈTRES
 
@@ -52,10 +52,10 @@ colors = {
 }
 
 sequence_length = 3  # taille de la séquence utilisée par le modèle
-future_steps = 5  # nombre de prédictions futures
+future_steps = 7  # nombre de prédictions futures
 
 dt = 0.5  # intervalle de temps utilisé pendant le training 
-alpha = 0.8  # facteur de smoothing (réduction du bruit)
+#alpha = 0.8  # facteur de smoothing (réduction du bruit)
 
 # historique des positions (pour affichage trajectoire)
 track_history = defaultdict(list)
@@ -126,6 +126,10 @@ while True:
             cx = int((x1 + x2) / 2)
             cy = int((y1 + y2) / 2)
 
+            # ignore dashboard / ego car (bas de l'image)
+            if cy > orig_height * 0.7: # Si cy supérieur à 70% de la hauteur de l'image (en bas), la zone est ignorée
+                continue
+
             # conversion coordonnées → affichage
             x1_d = int(x1 * scale_disp_x)
             y1_d = int(y1 * scale_disp_y)
@@ -153,7 +157,7 @@ while True:
             track = track_history[obj_id]  # historique de l'objet
             track.append((cx_d, cy_d))  # ajout du point
 
-            if len(track) > 30:  # limite de taille
+            if len(track) > 15:  # limite de taille
                 track.pop(0)
 
             # dessin des lignes de trajectoire
@@ -173,6 +177,18 @@ while True:
 
                 prev_x, prev_y, _, _ = track_states[obj_id][-1]
 
+                # vitesse brute (avant smoothing)
+                raw_vx = (x_norm - prev_x) / dt
+                raw_vy = (y_norm - prev_y) / dt
+
+                speed = abs(raw_vx) + abs(raw_vy)
+
+                # alpha dynamique
+                if speed < 0.01:
+                    alpha = 0.9   # très stable si objet lent
+                else:
+                    alpha = 0.6   # plus réactif si mouvement rapide
+
                 # smoothing (réduit le bruit YOLO)
                 x_norm = alpha * prev_x + (1 - alpha) * x_norm
                 y_norm = alpha * prev_y + (1 - alpha) * y_norm
@@ -191,16 +207,22 @@ while True:
             if len(track_states[obj_id]) > 30:
                 track_states[obj_id].pop(0)
 
-           
+            # ignore objets trop loin
+            if y_norm < 0.25:
+                continue
+
             # PRÉDICTION FUTURE
            
-            if len(track_states[obj_id]) >= sequence_length and frame_count % 2 == 0:
+            if len(track_states[obj_id]) >= sequence_length and frame_count % 3 == 0: # Si assez d'historique pour l'objet (3 séquences) et si frame de 3 (prédiction toutes les 3 frames)
 
                 # récupération de la séquence récente
                 seq = np.array(track_states[obj_id][-sequence_length:], dtype=np.float32)
 
                 # prédiction future
                 preds = predict_future_fast(world_model, seq, steps=future_steps)
+
+                # Smoothing des prédictions
+                preds = preds * 0.7 + seq[-1] * 0.3 # Stabiliser les prédictions
 
                 pred_points = []
 
@@ -212,11 +234,11 @@ while True:
 
                 # dessin des trajectoires futures
                 for i in range(1, len(pred_points)):
-                    cv2.line(display_frame, pred_points[i-1], pred_points[i], (0,0,255), 2)
+                    cv2.line(display_frame, pred_points[i-1], pred_points[i], (0,165,255), 2)
 
                 # points futurs
                 for pt in pred_points:
-                    cv2.circle(display_frame, pt, 3, (0,0,255), -1)
+                    cv2.circle(display_frame, pt, 3, (0,165,255), -1)
 
     # Sauvegarde
     out.write(display_frame) # Ajoute le frame dans la video

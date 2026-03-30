@@ -116,8 +116,8 @@ LSTM improves temporal understanding and trajectory smoothness.
 
 ### Results:
 
-* MAE ≈ **0.02 (normalized)**
-* ≈ **~20 pixels error** in real space
+* MAE ≈ **0.01 (normalized)**
+* ≈ **Average error of 3.9% 
 
 ✔ Stable convergence
 ✔ No overfitting
