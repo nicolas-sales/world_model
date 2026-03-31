@@ -13,7 +13,7 @@ world_model = tf.keras.models.load_model("models/world_model.keras")  # modèle 
 
 # 2 CHARGEMENT DE LA VIDÉO
 
-video_path = "data/videos/2.mp4"  # chemin de la vidéo
+video_path = "data/videos/20.mp4"  # chemin de la vidéo
 cap = cv2.VideoCapture(video_path)  # ouverture de la vidéo
 
 # vérification que la vidéo s'ouvre bien
@@ -129,6 +129,10 @@ while True:
         boxes = results[0].boxes  # bounding boxes
         ids = boxes.id.int().cpu().tolist()  # IDs des objets
 
+        # Paramètres danger maximum
+        max_danger=-1 # -1 car inférieur à tous les scores possibles de 0 à ...
+        most_dangerous=None
+
         # boucle sur chaque objet détecté
         for box, obj_id in zip(boxes, ids):
 
@@ -226,6 +230,10 @@ while True:
 
             danger = compute_danger(x_norm,y_norm,vx,vy)
 
+            if danger > max_danger:
+                max_danger=danger
+                most_dangerous = (x1_d,y1_d,name,danger)
+
             if danger>=6:
                 danger_color=(0,0,255) # rouge
             elif danger>=3:
@@ -273,6 +281,14 @@ while True:
                 # points futurs
                 for pt in pred_points:
                     cv2.circle(display_frame, pt, 3, (0,165,255), -1)
+
+        if most_dangerous is not None:
+            x, y, name, danger = most_dangerous
+
+            cv2.putText(display_frame, f"MAIN: {name} ({danger})",
+                        (50, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                        (0,0,255), 3)   
 
     # affichage final
     cv2.imshow("World Model V4 (FULL RES YOLO)", display_frame)
