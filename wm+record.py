@@ -116,7 +116,7 @@ def describe_objects(x,y,vx,vy,name,danger):
     # Position horizontale
     if x < 0.4:
         pos_x="left"
-    if x > 0.6:
+    elif x > 0.6:
         pos_x="right"
     else:
         pos_x="center"
@@ -124,7 +124,7 @@ def describe_objects(x,y,vx,vy,name,danger):
     # Distance
     if y > 0.6:
         distance="very close"
-    if y > 0.4:
+    elif y > 0.4:
         distance="close"
     else:
         distance="far"
@@ -132,7 +132,7 @@ def describe_objects(x,y,vx,vy,name,danger):
     # Mouvement
     if vy > 0.02:
         motion="approaching fast"
-    if vy > 0.005:
+    elif vy > 0.005:
         motion="approaching"
     else:
         motion="stable"
@@ -268,7 +268,7 @@ while True:
 
             if danger > max_danger:
                 max_danger=danger
-                most_dangerous = (x1_d,y1_d,name,danger)
+                most_dangerous = (x_norm,y_norm,vx,vy,name,danger)
 
             if danger>=6:
                 danger_color=(0,0,255) # rouge
@@ -320,19 +320,33 @@ while True:
                     cv2.circle(display_frame, pt, 3, (0,165,255), -1)
 
         if most_dangerous is not None:
-            x, y, name, danger = most_dangerous
+            x, y, vx, vy, name, danger = most_dangerous
 
-            desc=describe_objects(x_norm,y_norm,vx,vy,name,danger) # Description image avec danger prioritaire
+            desc=describe_objects(x, y, vx, vy, name, danger) # Description image avec danger prioritaire
 
-            cv2.putText(display_frame, desc,
+            text = desc
+
+            # taille du texte
+            (text_w, text_h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+
+            # rectangle noir derrière
+            cv2.rectangle(display_frame, (50, 90 - text_h - 5), (50 + text_w, 90 + 5), (0,0,0), -1)
+
+            # texte rouge
+            cv2.putText(display_frame, text,
                         (50, 90),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                         (255,255,255), 2)
 
-            #cv2.putText(display_frame, f"MAIN: {name} ({danger})",
-                        #(50, 50),
-                        #cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                        #(0,0,255), 3)   
+            #cv2.putText(display_frame, desc,
+                        #(50, 90),
+                        #cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        #(255,255,255), 2)
+
+            cv2.putText(display_frame, f"MAIN: {name} ({danger})",
+                        (50, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                        (0,0,255), 3)   
 
 
     # Sauvegarde
