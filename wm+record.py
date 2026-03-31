@@ -109,7 +109,38 @@ def compute_danger(x,y,vx,vy):
 
     return score
 
-# 6 BOUCLE PRINCIPALE
+# 6 Description
+
+def describe_objects(x,y,vx,vy,name,danger):
+
+    # Position horizontale
+    if x < 0.4:
+        pos_x="left"
+    if x > 0.6:
+        pos_x="right"
+    else:
+        pos_x="center"
+
+    # Distance
+    if y > 0.6:
+        distance="very close"
+    if y > 0.4:
+        distance="close"
+    else:
+        distance="far"
+    
+    # Mouvement
+    if vy > 0.02:
+        motion="approaching fast"
+    if vy > 0.005:
+        motion="approaching"
+    else:
+        motion="stable"
+
+    return f"A {name} is {distance} ahead on the {pos_x}, {motion}"
+
+
+# 7 BOUCLE PRINCIPALE
 
 while True:
 
@@ -291,10 +322,18 @@ while True:
         if most_dangerous is not None:
             x, y, name, danger = most_dangerous
 
-            cv2.putText(display_frame, f"MAIN: {name} ({danger})",
-                        (50, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                        (0,0,255), 3)   
+            desc=describe_objects(x_norm,y_norm,vx,vy,name,danger) # Description image avec danger prioritaire
+
+            cv2.putText(display_frame, desc,
+                        (50, 90),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (255,255,255), 2)
+
+            #cv2.putText(display_frame, f"MAIN: {name} ({danger})",
+                        #(50, 50),
+                        #cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                        #(0,0,255), 3)   
+
 
     # Sauvegarde
     out.write(display_frame) # Ajoute le frame dans la video
