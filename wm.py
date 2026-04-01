@@ -105,9 +105,6 @@ def compute_danger(x,y,vx,vy):
     return score
 
 
-
-
-
 # 6 Description
 
 def describe_objects(x,y,vx,vy,name,danger):
@@ -139,11 +136,20 @@ def describe_objects(x,y,vx,vy,name,danger):
     return f"A {name} is {distance} ahead on the {pos_x}, {motion}"
 
 
+# 7 Action recommandée
+
+def decide_action(dange):
+    if danger > 7:
+        return "BRAKE NOW!!!"
+    elif danger >= 5:
+        return "Slow down"
+    elif danger >= 3:
+        return "BE CAREFUL"
+    else:
+        return "SAFE"
 
 
-
-
-# 7 BOUCLE PRINCIPALE
+# 8 BOUCLE PRINCIPALE
 
 while True:
 
@@ -326,18 +332,23 @@ while True:
 
             desc=describe_objects(x, y, vx, vy, name, danger) # Description image avec danger prioritaire
 
+            action=decide_action(danger) # Action recommandée
+
             text = desc
 
+            x_text = 150
+
+            # Text DSescription
             # taille du texte
-            (text_w, text_h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+            (text_w, text_h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 2)
 
             # rectangle noir derrière
-            cv2.rectangle(display_frame, (50, 90 - text_h - 5), (50 + text_w, 90 + 5), (0,0,0), -1)
+            cv2.rectangle(display_frame, (x_text, 30 - text_h - 5), (x_text + text_w, 30 + 5), (0,0,0), -1)
 
-            # texte rouge
+            # texte blanc sur fond noir (phrase explicative)
             cv2.putText(display_frame, text,
-                        (50, 90),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (x_text, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45,
                         (255,255,255), 2)
 
             #cv2.putText(display_frame, desc,
@@ -345,10 +356,18 @@ while True:
                         #cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                         #(255,255,255), 2)
 
+            # Texte rouge (objet prioritaire)
             cv2.putText(display_frame, f"MAIN: {name} ({danger})",
-                        (50, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                        (0,0,255), 3)   
+                        (x_text, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                        (0,0,255), 2)   
+            
+            # Texte rouge (action recommandée)
+            cv2.putText(display_frame, action,
+                (x_text, 90),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                (0,0,255), 2)
+            
 
     # affichage final
     cv2.imshow("World Model V4 (FULL RES YOLO)", display_frame)
