@@ -13,7 +13,7 @@ world_model = tf.keras.models.load_model("models/world_model.keras")  # modèle 
 
 # 2 CHARGEMENT DE LA VIDÉO
 
-video_path = "data/videos/2.mp4"  # chemin de la vidéo
+video_path = "data/videos/14.mp4"  # chemin de la vidéo
 cap = cv2.VideoCapture(video_path)  # ouverture de la vidéo
 
 # vérification que la vidéo s'ouvre bien
@@ -60,6 +60,10 @@ track_states = defaultdict(list)
 
 frame_count = 0  # compteur de frames (pour optimiser les prédictions)
 
+risk_history = defaultdict(list) # Evite que les prédictions sautent entre 2 frames et donc trop rapide visuellement
+future_history = defaultdict(list) # mémoire pour les prédictions
+last_risk = defaultdict(lambda: "stable")
+
 
 # 4 FONCTION DE PRÉDICTION 
 
@@ -85,7 +89,7 @@ def compute_danger(x,y,vx,vy):
     # Hauteur (adaptée au filtre 0.7)
     if y > 0.6:
         score+=3
-    if y > 0.45:
+    elif y > 0.45:
         score+=2
     elif y > 0.3:
         score+=1
@@ -138,12 +142,12 @@ def describe_objects(x,y,vx,vy,name,danger):
 
 # 7 Action recommandée
 
-def decide_action(dange):
-    if danger > 7:
+def decide_action(danger):
+    if danger > 6:
         return "BRAKE NOW!!!"
-    elif danger >= 5:
+    elif danger >= 4:
         return "Slow down"
-    elif danger >= 3:
+    elif danger >= 2:
         return "BE CAREFUL"
     else:
         return "SAFE"
@@ -174,9 +178,10 @@ while True:
         boxes = results[0].boxes  # bounding boxes
         ids = boxes.id.int().cpu().tolist()  # IDs des objets
 
-        # Paramètres danger maximum
+        # Initialisation paramètres danger maximum
         max_danger=-1 # -1 car inférieur à tous les scores possibles de 0 à ...
         most_dangerous=None
+        main_risk="stable"
 
         # boucle sur chaque objet détecté
         for box, obj_id in zip(boxes, ids):
@@ -275,10 +280,6 @@ while True:
 
             danger = compute_danger(x_norm,y_norm,vx,vy)
 
-            if danger > max_danger:
-                max_danger=danger
-                most_dangerous = (x_norm,y_norm,vx,vy,name,danger)
-
             if danger>=6:
                 danger_color=(0,0,255) # rouge
             elif danger>=3:
@@ -298,6 +299,9 @@ while True:
             cv2.FONT_HERSHEY_SIMPLEX, 0.6,
             danger_color, 2)
 
+            # Initialisation de risk_trend
+            risk_trend = "stable" # Si pas assez d'historique, risk_trend est quand même connu
+
             # PRÉDICTION FUTURE
            
             if len(track_states[obj_id]) >= sequence_length and frame_count % 3 == 0:
@@ -307,6 +311,58 @@ while True:
 
                 # prédiction future
                 preds = predict_future_fast(world_model, seq, steps=future_steps)
+
+                future_danger=[]
+
+                for pred in preds:
+                    fx,fy,fvx,fvy=pred
+                    d=compute_danger(fx,fy,fvx,fvy)
+                    future_danger.append(d)
+                
+                future_max=np.mean(future_danger)
+
+                future_history[obj_id].append(future_max)
+
+                if len(future_history[obj_id]) > 5:
+                    future_history[obj_id].pop(0)
+
+                future_max = np.mean(future_history[obj_id])
+
+                #if future_max > danger:
+                    #risk_trend="increasing"
+                #elif future_max < danger:
+                    #risk_trend="decreasing"
+                #else:
+                    #risk_trend="stable"
+
+                diff = future_max - danger
+
+                prev = last_risk[obj_id]
+
+                if diff > 0.3:
+                    new_risk = "increasing"
+                elif diff < -0.3:
+                    new_risk = "decreasing"
+                else:
+                    new_risk = "stable"
+
+                # HYSTERESIS
+                if prev == "increasing" and new_risk == "stable":
+                    risk_trend = "increasing"
+                elif prev == "decreasing" and new_risk == "stable":
+                    risk_trend = "decreasing"
+                else:
+                    risk_trend = new_risk
+
+                last_risk[obj_id] = risk_trend
+
+                #risk_history[obj_id].append(risk_trend)
+
+                # Pour éviter les les prédictions sautent de l'une à l'autre rapidement
+                #if len(risk_history[obj_id]) > 8:
+                    #risk_history[obj_id].pop(0)
+
+                #risk_trend = max(set(risk_history[obj_id]), key=risk_history[obj_id].count)
 
                 # petit smoothing des prédictions
                 preds = preds * 0.7 + seq[-1] * 0.3 # # Stabiliser les prédictions
@@ -326,6 +382,11 @@ while True:
                 # points futurs
                 for pt in pred_points:
                     cv2.circle(display_frame, pt, 3, (0,165,255), -1)
+
+            if danger > max_danger:
+                max_danger=danger
+                most_dangerous = (x_norm,y_norm,vx,vy,name,danger)
+                main_risk = risk_trend
 
         if most_dangerous is not None:
             x, y, vx, vy, name, danger = most_dangerous
@@ -367,6 +428,11 @@ while True:
                 (x_text, 90),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                 (0,0,255), 2)
+            
+            cv2.putText(display_frame, f"Risk: {main_risk}",
+            (x_text, 120),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+            (0,255,255), 2)
             
 
     # affichage final

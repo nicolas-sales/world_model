@@ -1,34 +1,33 @@
-# World Model for Object Motion Prediction
+### World Model for Object Motion Prediction
 
 ## Overview
 
-This project implements a **world model** capable of predicting the **future trajectory of objects** (cars, pedestrians, etc.) from video data.
+This project implements a world model capable of predicting the future trajectory of objects (cars, pedestrians, etc.) from video data and estimating risk in real time.
 
 The pipeline combines:
 
-* **Computer Vision (YOLOv8)** for detection and tracking
-* **Time-series modeling (LSTM / Dense)** for motion prediction
+Computer Vision (YOLOv8) for detection and tracking
+Time-series modeling (Dense / LSTM) for motion prediction
+Heuristic reasoning for risk estimation and action recommendation
 
-The result is a system that can:
+The system can:
 
-* track objects in a video
-* learn their motion patterns
-* predict their future positions in real time
-
----
+track objects in a video
+learn motion patterns
+predict future positions
+estimate danger levels
+generate scene descriptions
+suggest driving actions in real time
 
 ## Objectives
-
-* Extract object trajectories from raw videos
-* Build a structured dataset with positions and velocities
-* Train a model to predict future motion
-* Visualize predicted trajectories on video
-
----
+Extract object trajectories from raw videos
+Build a structured dataset with positions and velocities
+Train a model to predict future motion
+Visualize predicted trajectories
+Estimate risk from spatial and temporal features
+Generate interpretable outputs (text + actions)
 
 ## Pipeline
-
-```
 Video
 ↓
 YOLOv8 (Detection + Tracking)
@@ -44,196 +43,183 @@ Sequence generation (sliding window)
 World Model (Dense / LSTM)
 ↓
 Future trajectory prediction
-```
-
----
+↓
+Risk estimation (danger score)
+↓
+Scene description + action recommendation
 
 ## Dataset
 
-Each sample is structured as:
-
-```
+# Structure
 [video, frame, object_id, type, x, y, conf, vx, vy]
-```
 
-### Key preprocessing steps:
-
-* Tracking on **all frames** (for ID stability)
-* Frame sampling every **dt seconds**
-* Velocity computation using time difference
-* Per-video normalization:
-
-  * `x = x / width`
-  * `y = y / height`
-  * `vx = vx / width`
-  * `vy = vy / height`
-
----
+# Preprocessing
+Tracking on all frames for ID stability
+Frame sampling every dt seconds
+Velocity computation using time difference
+Per-video normalization:
+x = x / width  
+y = y / height  
+vx = vx / width  
+vy = vy / height  
 
 ## Temporal Modeling
 
-Sequences are built using a sliding window:
-
-```
+# Sequence Generation
 [t1, t2, t3] → predict t4
-```
-
-* Input shape: `(sequence_length, 4)`
-* Features: `[x, y, vx, vy]`
-
----
+Input shape: (sequence_length, 4)
+Features: [x, y, vx, vy]
 
 ## Models
 
-### Baseline (Dense)
-
-```python
+# Dense Model
 Input (3,4)
 → Flatten
 → Dense(64)
 → Dense(64)
 → Dense(4)
-```
 
-### Improved Model (LSTM)
-
-```python
+# LSTM Model
 Input (3,4)
 → LSTM(64)
 → Dense(64)
 → Dense(4)
-```
-
-LSTM improves temporal understanding and trajectory smoothness.
-
----
 
 ## Training
+Loss: MSE
+Metric: MAE
+Early stopping
+Results
+MAE ≈ 0.01 (normalized)
+≈ 3.9% average error
 
-* Loss: **MSE**
-* Metric: **MAE**
-* Early stopping used to prevent overfitting
-
-### Results:
-
-* MAE ≈ **0.01 (normalized)**
-* ≈ **Average error of 3.9% 
-
-✔ Stable convergence
-✔ No overfitting
-✔ Smooth trajectory predictions
-
----
+The model produces stable and smooth trajectory predictions.
 
 ## Inference
-
-The model predicts multiple future steps using a recursive approach:
-
-```
+Recursive Prediction
 [t1, t2, t3] → t4 → t5 → t6 ...
-```
 
-Each prediction is fed back into the model (sliding window).
+Each prediction is fed back into the model using a sliding window.
 
----
+## Real-Time System
 
-## Real-Time Integration
+# Core Features
+YOLO tracking on full-resolution frames
+Live normalization and velocity computation
+Trajectory history tracking
+Future trajectory prediction
 
-Features implemented:
+## Risk Estimation
 
-* YOLO tracking on full-resolution frames
-* Live normalization
-* Velocity computation
-* Trajectory history tracking
-* Future prediction overlay
+# Danger Score
 
-### Visualization:
+The system computes a danger score based on:
 
-* Past trajectory → object color
-* Future trajectory → red
+distance to ego vehicle (y)
+horizontal alignment (x)
+relative motion (vy)
 
----
+This score is used to:
+
+rank objects
+select the most critical object
+
+## Future-Aware Risk
+
+# Risk Trend
+
+The system compares:
+
+current danger vs predicted future danger
+
+To estimate:
+
+risk_trend ∈ {stable, increasing, decreasing}
+
+# Stabilization
+temporal averaging of predictions
+hysteresis to avoid rapid oscillations
+
+## Scene Description
+
+# Generated Output
+
+For the most dangerous object:
+
+A car is very close ahead on the center, approaching fast
+
+## Action Recommendation
+
+# Rule-Based Decision
+SAFE
+BE CAREFUL
+Slow down
+BRAKE NOW
+
+Based on the danger score.
+
+## Visualization
+Bounding boxes with object IDs
+Past trajectory (object color)
+Future trajectory (orange)
+Danger score display
+Main object highlighting
+
+# Overlay Information
+Scene description
+Recommended action
+Risk trend
 
 ## Performance Optimizations
-
-* Replaced `model.predict()` with direct model call:
-
-  ```python
-  model(x, training=False)
-  ```
-* Prediction every **2 frames**
-* Lightweight display resolution (while keeping full-res detection)
-
----
-
-## Example Output
-
-* Smooth predicted trajectories
-* Stable motion estimation
-* Real-time visualization
-
----
-
-## Possible Improvements
-
-* Increase sequence length (better temporal context)
-* Multi-object interaction modeling
-* Collision prediction
-* Trajectory smoothing (Kalman filter)
-* Graph Neural Networks for scene understanding
-
----
+Direct inference:
+model(x, training=False)
+Prediction every 3 frames
+Reduced display resolution
+Dynamic smoothing based on motion
 
 ## Key Insight
-
-```
 Tracking quality > Model complexity
-```
 
-The performance of the system strongly depends on the quality of object tracking.
-
----
+Tracking stability is critical for reliable predictions and risk estimation.
 
 ## Current Status
+Detection
+Tracking
+Dataset creation
+Model training
+Future prediction
+Real-time visualization
+Risk estimation
+Scene description
+Action recommendation
 
-✔ Detection
-✔ Tracking
-✔ Dataset creation
-✔ Model training
-✔ Future prediction
-✔ Real-time visualization
+## Next Step
 
-
----
+# LLM Integration
+Convert structured outputs into natural language
+Enable reasoning about:
+collision risk
+object interactions
+driving decisions
 
 ## Tech Stack
-
-* Python
-* OpenCV
-* Ultralytics YOLOv8
-* TensorFlow / Keras
-* NumPy / Pandas
-
----
+Python
+OpenCV
+Ultralytics YOLOv8
+TensorFlow / Keras
+NumPy
 
 ## Author
 
-Developed as a personal project exploring:
+Personal project exploring:
 
-* Computer Vision
-* Time-series prediction
-* Real-time ML systems
-
----
+Computer Vision
+Time-series prediction
+Real-time ML systems
+Scene understanding
 
 ## Future Vision
-
-This project can evolve into:
-
-* Autonomous driving simulation tools
-* Behavior prediction systems
-* Smart surveillance analytics
-
----
-
-*A step toward learning how machines understand and predict the physical world.*
+Autonomous driving perception modules
+Risk-aware navigation systems
+AI-assisted driving
+Intelligent scene reasoning systems
